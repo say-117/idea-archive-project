@@ -17,6 +17,7 @@ interface Idea {
 export default function Home() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [formData, setFormData] = useState({
     documentTitle: '',
@@ -47,9 +48,8 @@ export default function Home() {
   // 현재 사용자 확인
   useEffect(() => {
     const user = getCurrentUser();
-    if (user) {
-      setCurrentUser(user);
-    }
+    setCurrentUser(user);
+    setCheckingAuth(false);
   }, []);
 
   async function fetchIdeas() {
@@ -336,6 +336,22 @@ export default function Home() {
     setShowLoginModal(false);
     fetchIdeas();
   };
+
+  // 인증 확인 중이면 로딩 표시
+  if (checkingAuth) {
+    return (
+      <main className="bg-white text-gray-900 flex flex-col items-center px-4 py-12 overflow-visible">
+        <div className="w-full max-w-7xl mx-auto">
+          <div className="flex justify-center items-center min-h-[60vh]">
+            <div className="text-center">
+              <h1 className="text-3xl font-bold mb-4">📝 Idea Archive</h1>
+              <p className="text-gray-600">로딩 중...</p>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   // 로그인하지 않았으면 로그인 화면 표시
   if (!currentUser) {

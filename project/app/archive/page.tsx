@@ -19,6 +19,7 @@ export default function ArchivePage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedIdea, setSelectedIdea] = useState<Idea | null>(null);
@@ -58,9 +59,8 @@ export default function ArchivePage() {
   // 현재 사용자 확인
   useEffect(() => {
     const user = getCurrentUser();
-    if (user) {
-      setCurrentUser(user);
-    }
+    setCurrentUser(user);
+    setCheckingAuth(false);
   }, []);
 
   async function fetchIdeas() {
@@ -485,6 +485,18 @@ export default function ArchivePage() {
       setCurrentUser(user);
     }
   };
+
+  // 인증 확인 중이면 로딩 표시
+  if (checkingAuth) {
+    return (
+      <main className="min-h-screen bg-white text-gray-900 px-4 py-12 flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold mb-4">📝 Idea Archive</h1>
+          <p className="text-gray-600">로딩 중...</p>
+        </div>
+      </main>
+    );
+  }
 
   // 로그인하지 않았으면 로그인 화면 표시
   if (!currentUser) {
