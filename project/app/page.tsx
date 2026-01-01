@@ -3,15 +3,20 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { getCurrentUser, type User } from '@/lib/auth';
+import LoginModal from '@/components/LoginModal';
 
 interface Idea {
   id: string;
   title: string;
   body: string;
   created_at: string;
+  user_id?: string;
 }
 
 export default function Home() {
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [formData, setFormData] = useState({
     documentTitle: '',
@@ -39,19 +44,36 @@ export default function Home() {
   const router = useRouter();
   const previewRef = useRef<HTMLFormElement>(null);
 
+  // 현재 사용자 확인
+  useEffect(() => {
+    const user = getCurrentUser();
+    if (user) {
+      setCurrentUser(user);
+    } else {
+      setShowLoginModal(true);
+    }
+  }, []);
+
   async function fetchIdeas() {
+    if (!currentUser) return;
+    
     setLoading(true);
     const { data, error } = await supabase
       .from('ideas')
       .select('*')
+      .eq('user_id', currentUser.id)
       .order('created_at', { ascending: false });
     if (!error && data) setIdeas(data);
     setLoading(false);
   }
 
   useEffect(() => {
-    fetchIdeas();
-    
+    if (currentUser) {
+      fetchIdeas();
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
     // 폼 로드 시 최초등록일 설정 (편집 모드가 아닐 때만)
     if (!formData.createdAt && !editingId) {
       setFormData((prev) => ({
@@ -162,7 +184,7 @@ export default function Home() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!formData.name.trim()) return;
+    if (!formData.name.trim() || !currentUser) return;
     
     const now = new Date().toISOString();
     const submitData = {
@@ -179,8 +201,10 @@ export default function Home() {
         .update({
           title: formData.name.trim(),
           body: JSON.stringify(submitData),
+          user_id: currentUser.id,
         })
-        .eq('id', editingId);
+        .eq('id', editingId)
+        .eq('user_id', currentUser.id);
       
       if (!error) {
         resetForm();
@@ -192,6 +216,7 @@ export default function Home() {
         {
           title: formData.name.trim(),
           body: JSON.stringify(submitData),
+          user_id: currentUser.id,
         },
       ]);
       
@@ -271,10 +296,14 @@ export default function Home() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('정말 이 아이디어를 삭제하시겠습니까?')) return;
+    if (!confirm('정말 이 아이디어를 삭제하시겠습니까?') || !currentUser) return;
     
     setDeletingId(id);
-    const { error } = await supabase.from('ideas').delete().eq('id', id);
+    const { error } = await supabase
+      .from('ideas')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', currentUser.id);
     if (!error) {
       fetchIdeas();
     }
@@ -304,6 +333,35 @@ export default function Home() {
     });
   }
 
+  const handleLoginSuccess = (user: User) => {
+    setCurrentUser(user);
+    setShowLoginModal(false);
+    fetchIdeas();
+  };
+
+  // 로그인하지 않았으면 로그인 모달만 표시
+  if (!currentUser) {
+    return (
+      <>
+        <main className="bg-white text-gray-900 flex flex-col items-center px-4 py-12 overflow-visible">
+          <div className="w-full max-w-7xl mx-auto">
+            <div className="flex justify-center items-center min-h-[60vh]">
+              <div className="text-center">
+                <h1 className="text-3xl font-bold mb-4">📝 Idea Archive</h1>
+                <p className="text-gray-600 mb-4">로그인이 필요합니다.</p>
+              </div>
+            </div>
+          </div>
+        </main>
+        {showLoginModal && (
+          <LoginModal
+            onSuccess={handleLoginSuccess}
+            onClose={() => setShowLoginModal(false)}
+          />
+        )}
+      </>
+    );
+  }
 
   return (
     <main className="bg-white text-gray-900 flex flex-col items-center px-4 py-12 overflow-visible">
@@ -619,6 +677,14 @@ export default function Home() {
           </div>
         )}
       </div>
+
+      {/* 로그인 모달 */}
+      {showLoginModal && (
+        <LoginModal
+          onSuccess={handleLoginSuccess}
+          onClose={() => setShowLoginModal(false)}
+        />
+      )}
     </main>
   );
 }

@@ -3,15 +3,22 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
+import { getCurrentUser, type User } from '@/lib/auth';
+import LoginModal from '@/components/LoginModal';
+import ChangePasswordModal from '@/components/ChangePasswordModal';
 
 interface Idea {
   id: string;
   title: string;
   body: string;
   created_at: string;
+  user_id?: string;
 }
 
 export default function ArchivePage() {
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedIdea, setSelectedIdea] = useState<Idea | null>(null);
@@ -48,11 +55,24 @@ export default function ArchivePage() {
   const contentRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLElement>(null);
 
+  // 현재 사용자 확인
+  useEffect(() => {
+    const user = getCurrentUser();
+    if (user) {
+      setCurrentUser(user);
+    } else {
+      setShowLoginModal(true);
+    }
+  }, []);
+
   async function fetchIdeas() {
+    if (!currentUser) return;
+    
     setLoading(true);
     const { data, error } = await supabase
       .from('ideas')
       .select('*')
+      .eq('user_id', currentUser.id)
       .order('created_at', { ascending: false });
     if (!error && data) {
       // updatedAt 기준으로 정렬 (최근 수정된 순)
@@ -78,6 +98,12 @@ export default function ArchivePage() {
     }
     setLoading(false);
   }
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchIdeas();
+    }
+  }, [currentUser]);
 
   // 최근 수정된 아이디어 상위 3개 가져오기
   const recentIdeas = ideas.slice(0, 3);
@@ -220,7 +246,7 @@ export default function ArchivePage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedIdea || !formData.name.trim()) return;
+    if (!selectedIdea || !formData.name.trim() || !currentUser) return;
     
     setSaving(true);
     const now = new Date().toISOString();
@@ -235,8 +261,10 @@ export default function ArchivePage() {
       .update({
         title: formData.name.trim(),
         body: JSON.stringify(submitData),
+        user_id: currentUser.id,
       })
-      .eq('id', selectedIdea.id);
+      .eq('id', selectedIdea.id)
+      .eq('user_id', currentUser.id);
     
     if (!error) {
       await fetchIdeas();
@@ -245,6 +273,7 @@ export default function ArchivePage() {
         .from('ideas')
         .select('*')
         .eq('id', selectedIdea.id)
+        .eq('user_id', currentUser.id)
         .single();
       if (data) {
         handleIdeaClick(data);
@@ -387,10 +416,14 @@ export default function ArchivePage() {
     if (e) {
       e.stopPropagation();
     }
-    if (!confirm('정말 이 아이디어를 삭제하시겠습니까?')) return;
+    if (!confirm('정말 이 아이디어를 삭제하시겠습니까?') || !currentUser) return;
     
     setDeletingId(id);
-    const { error } = await supabase.from('ideas').delete().eq('id', id);
+    const { error } = await supabase
+      .from('ideas')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', currentUser.id);
     if (!error) {
       fetchIdeas();
       if (selectedIdea?.id === id) {
@@ -440,6 +473,39 @@ export default function ArchivePage() {
     if (e.key === 'Enter') {
       handleSearch();
     }
+  }
+
+  const handleLoginSuccess = (user: User) => {
+    setCurrentUser(user);
+    setShowLoginModal(false);
+    fetchIdeas();
+  };
+
+  const handlePasswordChangeSuccess = () => {
+    const user = getCurrentUser();
+    if (user) {
+      setCurrentUser(user);
+    }
+  };
+
+  // 로그인하지 않았으면 로그인 모달만 표시
+  if (!currentUser) {
+    return (
+      <>
+        <main className="min-h-screen bg-white text-gray-900 px-4 py-12 flex items-center justify-center">
+          <div className="text-center">
+            <h1 className="text-3xl font-bold mb-4">📝 Idea Archive</h1>
+            <p className="text-gray-600 mb-4">로그인이 필요합니다.</p>
+          </div>
+        </main>
+        {showLoginModal && (
+          <LoginModal
+            onSuccess={handleLoginSuccess}
+            onClose={() => setShowLoginModal(false)}
+          />
+        )}
+      </>
+    );
   }
 
   return (
@@ -1208,71 +1274,99 @@ export default function ArchivePage() {
             </div>
 
             {/* 오른쪽 끝: 검정색 모듈 */}
-            <div className="lg:sticky lg:top-12 lg:h-[200px] lg:flex-shrink-0 hidden lg:flex flex-col items-center justify-start gap-3 bg-black rounded-lg p-4">
+            <div className="lg:sticky lg:top-12 lg:h-auto lg:flex-shrink-0 hidden lg:flex flex-col items-center justify-between gap-3 bg-black rounded-lg p-4">
+            <div className="flex flex-col items-center gap-3">
+              <button
+                onClick={handleFavoriteSelected}
+                className="w-12 h-12 border-[1.5px] border-[#d1d5db] rounded-lg flex items-center justify-center hover:bg-white/10 transition-colors"
+                title="Ideas to Revisit"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-6 w-6 text-[#d1d5db]"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
+                  />
+                </svg>
+              </button>
+              <button
+                onClick={handleOpenViewer}
+                className="w-12 h-12 border-[1.5px] border-[#d1d5db] rounded-lg flex items-center justify-center hover:bg-white/10 transition-colors"
+                title="새로운 아이디어 뷰어"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-6 w-6 text-[#d1d5db]"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                  />
+                </svg>
+              </button>
+              <button
+                onClick={handleShareClick}
+                disabled={!selectedIdea}
+                className="w-12 h-12 border-[1.5px] border-[#d1d5db] rounded-lg flex items-center justify-center hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="공유"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-6 w-6 text-[#d1d5db]"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
+                  />
+                </svg>
+              </button>
+            </div>
             <button
-              onClick={handleFavoriteSelected}
+              onClick={() => setShowChangePasswordModal(true)}
               className="w-12 h-12 border-[1.5px] border-[#d1d5db] rounded-lg flex items-center justify-center hover:bg-white/10 transition-colors"
-              title="Ideas to Revisit"
+              title="계정 설정"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 className="h-6 w-6 text-[#d1d5db]"
-                viewBox="0 0 24 24"
                 fill="none"
+                viewBox="0 0 24 24"
                 stroke="currentColor"
               >
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
+                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
                 />
-              </svg>
-            </button>
-            <button
-              onClick={handleOpenViewer}
-              className="w-12 h-12 border-[1.5px] border-[#d1d5db] rounded-lg flex items-center justify-center hover:bg-white/10 transition-colors"
-              title="새로운 아이디어 뷰어"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-6 w-6 text-[#d1d5db]"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
                   d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                />
-              </svg>
-            </button>
-            <button
-              onClick={handleShareClick}
-              disabled={!selectedIdea}
-              className="w-12 h-12 border-[1.5px] border-[#d1d5db] rounded-lg flex items-center justify-center hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title="공유"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-6 w-6 text-[#d1d5db]"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
                 />
               </svg>
             </button>
@@ -1405,6 +1499,23 @@ export default function ArchivePage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 로그인 모달 */}
+      {showLoginModal && (
+        <LoginModal
+          onSuccess={handleLoginSuccess}
+          onClose={() => setShowLoginModal(false)}
+        />
+      )}
+
+      {/* 비밀번호 변경 모달 */}
+      {showChangePasswordModal && currentUser && (
+        <ChangePasswordModal
+          currentUser={currentUser}
+          onSuccess={handlePasswordChangeSuccess}
+          onClose={() => setShowChangePasswordModal(false)}
+        />
       )}
     </main>
   );
