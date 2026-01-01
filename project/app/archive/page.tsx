@@ -60,8 +60,6 @@ export default function ArchivePage() {
     const user = getCurrentUser();
     if (user) {
       setCurrentUser(user);
-    } else {
-      setShowLoginModal(true);
     }
   }, []);
 
@@ -488,7 +486,7 @@ export default function ArchivePage() {
     }
   };
 
-  // 로그인하지 않았으면 로그인 모달만 표시
+  // 로그인하지 않았으면 로그인 화면 표시
   if (!currentUser) {
     return (
       <>
@@ -496,6 +494,12 @@ export default function ArchivePage() {
           <div className="text-center">
             <h1 className="text-3xl font-bold mb-4">📝 Idea Archive</h1>
             <p className="text-gray-600 mb-4">로그인이 필요합니다.</p>
+            <button
+              onClick={() => setShowLoginModal(true)}
+              className="bg-black text-white px-6 py-2 rounded hover:bg-gray-900 transition font-medium"
+            >
+              로그인
+            </button>
           </div>
         </main>
         {showLoginModal && (
@@ -724,17 +728,22 @@ export default function ArchivePage() {
                               </div>
                               {parsed.concept && (
                                 <div className="text-sm text-gray-600 mb-1">
-                                  <span className="font-medium">Concept:</span> {parsed.concept}
+                                  <strong>Concept:</strong> {parsed.concept}
                                 </div>
                               )}
                               {parsed.problem && (
                                 <div className="text-sm text-gray-600 mb-1 line-clamp-2">
-                                  {parsed.problem}
+                                  <strong>Problem:</strong> {parsed.problem}
                                 </div>
                               )}
                               {parsed.coreFeatures && (
                                 <div className="text-sm text-gray-600 mb-1 line-clamp-1">
-                                  {parsed.coreFeatures}
+                                  <strong>핵심 기능:</strong> {parsed.coreFeatures}
+                                </div>
+                              )}
+                              {parsed.target && (
+                                <div className="text-sm text-gray-600 mb-1">
+                                  <strong>타겟:</strong> {parsed.target}
                                 </div>
                               )}
                               {parsed.imagePreviews && parsed.imagePreviews.length > 0 && parsed.imagePreviews[0] && (
@@ -1235,17 +1244,22 @@ export default function ArchivePage() {
                             </div>
                             {parsed.concept && (
                               <div className="text-sm text-gray-600 mb-1">
-                                <span className="font-medium">Concept:</span> {parsed.concept}
+                                <strong>Concept:</strong> {parsed.concept}
                               </div>
                             )}
                             {parsed.problem && (
                               <div className="text-sm text-gray-600 mb-1 line-clamp-2">
-                                {parsed.problem}
+                                <strong>Problem:</strong> {parsed.problem}
                               </div>
                             )}
                             {parsed.coreFeatures && (
                               <div className="text-sm text-gray-600 mb-1 line-clamp-1">
-                                {parsed.coreFeatures}
+                                <strong>핵심 기능:</strong> {parsed.coreFeatures}
+                              </div>
+                            )}
+                            {parsed.target && (
+                              <div className="text-sm text-gray-600 mb-1">
+                                <strong>타겟:</strong> {parsed.target}
                               </div>
                             )}
                             {parsed.imagePreviews && parsed.imagePreviews.length > 0 && parsed.imagePreviews[0] && (

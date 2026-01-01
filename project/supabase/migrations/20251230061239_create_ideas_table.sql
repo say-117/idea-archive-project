@@ -25,24 +25,25 @@ ALTER TABLE ideas ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Anyone can view ideas"
   ON ideas
   FOR SELECT
-  TO anon, authenticated
+  TO authenticated + USING (auth.uid() = user_id)
   USING (true);
 
 CREATE POLICY "Anyone can insert ideas"
   ON ideas
   FOR INSERT
-  TO anon, authenticated
+  TO authenticated + USING (auth.uid() = user_id)
   WITH CHECK (true);
 
 CREATE POLICY "Anyone can update ideas"
   ON ideas
   FOR UPDATE
-  TO anon, authenticated
+  TO authenticated + USING (auth.uid() = user_id)
   USING (true)
   WITH CHECK (true);
 
 CREATE POLICY "Anyone can delete ideas"
   ON ideas
   FOR DELETE
-  TO anon, authenticated
+  TO authenticated + USING (auth.uid() = user_id)
   USING (true);
+
